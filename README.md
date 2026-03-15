@@ -83,6 +83,6 @@ go run .\cmd\quiverkeep doctor --json
 repository branch, not in workspace root.
 
 1. Open `quiverkeep-core`
-2. Verify branch: `codex/feature-v0-1-core-base`
+2. Verify branch: `codex/feat/core-base-runtime`
 3. Run build/test commands from this repository only
 4. Commit in `quiverkeep-core` repository lifecycle
