@@ -24,6 +24,7 @@ const (
 	anthropicMessagesPath   = "/v1/messages"
 	defaultAnthropicBaseURL = "https://api.anthropic.com"
 	defaultAnthropicVersion = "2023-06-01"
+	maxUpstreamBodyBytes    = 8 * 1024 * 1024
 )
 
 type UsageWriter interface {
@@ -191,7 +192,8 @@ func (p *AnthropicProxy) Forward(ctx context.Context, req ForwardRequest) (Forwa
 	}
 	defer upstreamResp.Body.Close()
 
-	body, err := io.ReadAll(upstreamResp.Body)
+	limitedBody := io.LimitReader(upstreamResp.Body, maxUpstreamBodyBytes+1)
+	body, err := io.ReadAll(limitedBody)
 	if err != nil {
 		proxyErr := qerrors.New(qerrors.CodeProxyUpstreamError, "failed reading anthropic upstream response")
 		p.markFailure(req.RequestID, proxyErr, &upstreamResp.StatusCode)
@@ -203,6 +205,22 @@ func (p *AnthropicProxy) Forward(ctx context.Context, req ForwardRequest) (Forwa
 			"error_code", qerrors.CodeOf(proxyErr),
 			"status", upstreamResp.StatusCode,
 			"error_class", classifyForwardError(err),
+			"retry_decision", "no_retry",
+		)
+		return ForwardResponse{}, proxyErr
+	}
+	if len(body) > maxUpstreamBodyBytes {
+		proxyErr := qerrors.New(qerrors.CodeProxyUpstreamError, "anthropic upstream response exceeds size limit")
+		p.markFailure(req.RequestID, proxyErr, &upstreamResp.StatusCode)
+		p.logger.Error("proxy upstream response exceeded size limit",
+			"component", "proxy",
+			"operation", "proxy_forward",
+			"provider", "anthropic",
+			"request_id", req.RequestID,
+			"error_code", qerrors.CodeOf(proxyErr),
+			"status", upstreamResp.StatusCode,
+			"response_size", len(body),
+			"max_response_size", maxUpstreamBodyBytes,
 			"retry_decision", "no_retry",
 		)
 		return ForwardResponse{}, proxyErr
@@ -219,7 +237,7 @@ func (p *AnthropicProxy) Forward(ctx context.Context, req ForwardRequest) (Forwa
 	)
 
 	if upstreamResp.StatusCode < http.StatusOK || upstreamResp.StatusCode >= http.StatusMultipleChoices {
-		proxyErr := qerrors.New(qerrors.CodeProxyUpstreamError, fmt.Sprintf("anthropic upstream returned %d", upstreamResp.StatusCode))
+		proxyErr := proxyErrorFromUpstreamStatus(upstreamResp.StatusCode)
 		p.markFailure(req.RequestID, proxyErr, &upstreamResp.StatusCode)
 		p.logger.Error("proxy upstream returned non-success status",
 			"component", "proxy",
@@ -479,4 +497,13 @@ func statusMessageFromError(err error) string {
 		return appErr.Message
 	}
 	return "proxy operation failed"
+}
+
+func proxyErrorFromUpstreamStatus(statusCode int) *qerrors.AppError {
+	switch statusCode {
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
+		return qerrors.New(qerrors.CodeValidationFailed, fmt.Sprintf("anthropic request rejected with status %d", statusCode))
+	default:
+		return qerrors.New(qerrors.CodeProxyUpstreamError, fmt.Sprintf("anthropic upstream returned %d", statusCode))
+	}
 }
