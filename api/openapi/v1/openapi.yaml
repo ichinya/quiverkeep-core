@@ -1,0 +1,50 @@
+openapi: 3.0.3
+info:
+  title: QuiverKeep Core API
+  version: v1.0.0
+paths:
+  /api/v1/status:
+    get:
+      summary: Core status
+      responses:
+        "200":
+          description: Status payload
+  /api/v1/usage:
+    get:
+      summary: Usage summary
+      parameters:
+        - name: service
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Usage payload
+  /api/v1/limits:
+    get:
+      summary: Limits payload
+      responses:
+        "200":
+          description: Limits payload
+  /api/v1/subscriptions:
+    get:
+      summary: Subscription list
+      responses:
+        "200":
+          description: Subscription payload
+  /api/v1/providers:
+    get:
+      summary: Provider status list
+      responses:
+        "200":
+          description: Provider status payload

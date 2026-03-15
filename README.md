@@ -2,7 +2,8 @@
 
 > Core service and CLI for QuiverKeep.
 
-`quiverkeep-core` is the system of record for the product. This repository will own domain logic, configuration, storage, API contracts, proxy flows, collectors, and the Go CLI entrypoint.
+`quiverkeep-core` is the system of record for the product. This repository owns domain logic, configuration, storage,
+API contracts, and the Go CLI entrypoint.
 
 ## Responsibilities
 
@@ -20,4 +21,68 @@
 
 ## Status
 
-Repository initialized. Implementation has not started yet.
+Core Base implementation is present and runnable.
+
+## Verified Snapshot (2026-03-15)
+
+- Go module and single binary entrypoint (`cmd/quiverkeep`).
+- Config loader with precedence `flags > env > file > defaults`.
+- Canonical config path via OS config dir with legacy fallback to `~/.quiverkeep/config.json`.
+- SQLite storage (`modernc.org/sqlite`) with migration bootstrap and lock file.
+- HTTP API endpoints:
+    - `GET /api/v1/status`
+    - `GET /api/v1/usage`
+    - `GET /api/v1/limits`
+    - `GET /api/v1/subscriptions`
+    - `GET /api/v1/providers`
+- Thin CLI commands:
+    - `serve`, `status`, `usage`, `limits`, `config show`, `config path`, `doctor`, `version`
+- Structured logging with configurable `LOG_LEVEL` and JSON output.
+- Contract/integration/perf/security tests (`go test ./...`).
+
+## Quick Start
+
+```powershell
+Set-Location D:\Projects\aifhub\quiverkeep\quiverkeep-core
+go test ./...
+go run .\cmd\quiverkeep serve
+```
+
+In another terminal:
+
+```powershell
+Set-Location D:\Projects\aifhub\quiverkeep\quiverkeep-core
+go run .\cmd\quiverkeep status
+go run .\cmd\quiverkeep usage --json
+go run .\cmd\quiverkeep doctor --json
+```
+
+## Logging Policy
+
+- Structured logs only (JSON).
+- Required keys in operational flows: `component`, `operation`, `request_id`, `duration_ms`, `error_code` when
+  applicable.
+- Levels:
+    - `DEBUG` for detailed flow and override resolution.
+    - `INFO` for lifecycle and successful operations.
+    - `WARN` for recoverable issues (auth mismatch, fallback, stale lock).
+    - `ERROR` for failed operations and exits.
+- Control:
+    - `QUIVERKEEP_LOG_LEVEL` (or `--log-level`) controls verbosity.
+    - Optional file sink via config `logging.path`.
+
+## Troubleshooting
+
+- `PORT_IN_USE`: run `quiverkeep serve --port 9000`.
+- `STORAGE_LOCK_ERROR`: check whether another core instance is active; stale lock is auto-cleaned.
+- `UNAUTHORIZED`: verify `QUIVERKEEP_TOKEN` / `Authorization: Bearer ...` policy for remote mode.
+
+## Repository Boundary Runbook
+
+`quiverkeep-core` is an independent repository. Implementation and commits for core tasks must be done in this
+repository branch, not in workspace root.
+
+1. Open `quiverkeep-core`
+2. Verify branch: `codex/feat/core-base-runtime`
+3. Run build/test commands from this repository only
+4. Commit in `quiverkeep-core` repository lifecycle

@@ -1,0 +1,27 @@
+{
+  "core": {
+    "url": "http://127.0.0.1:8765",
+    "auto_start": true,
+    "token": null,
+    "bind": "127.0.0.1",
+    "port": 8765
+  },
+  "providers": {
+    "openai": {
+      "key": ""
+    },
+    "anthropic": {
+      "key": ""
+    },
+    "copilot": {
+      "token": ""
+    }
+  },
+  "storage": {
+    "path": ""
+  },
+  "logging": {
+    "level": "info",
+    "path": ""
+  }
+}
