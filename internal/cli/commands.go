@@ -16,7 +16,6 @@ import (
 	"github.com/ichinya/quiverkeep-core/internal/cli/doctor"
 	"github.com/ichinya/quiverkeep-core/internal/cli/httpclient"
 	"github.com/ichinya/quiverkeep-core/internal/config"
-	qerrors "github.com/ichinya/quiverkeep-core/internal/errors"
 	"github.com/ichinya/quiverkeep-core/internal/logging"
 	"github.com/ichinya/quiverkeep-core/internal/storage"
 	"github.com/ichinya/quiverkeep-core/internal/version"
@@ -197,12 +196,9 @@ func buildDoctorCommand(ctx context.Context, opts *Options) *cobra.Command {
 				token = *cfg.Core.Token
 			}
 			client := httpclient.New(resolveURL(cfg, opts), token, logger)
-			report := doctor.Run(ctx, client, logger)
+			report, err := doctor.Run(ctx, client, logger)
 			output(report, opts.AsJSON)
-			if !report.CoreRunning {
-				return qerrors.New(qerrors.CodeCoreNotRunning, report.Message)
-			}
-			return nil
+			return err
 		},
 	}
 }

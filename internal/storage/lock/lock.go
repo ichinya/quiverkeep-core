@@ -80,8 +80,19 @@ func handlePotentialStaleLock(path string, logger *logging.Logger) error {
 	}
 
 	pid := extractPID(string(content))
+	if pid > 0 && processExists(pid) {
+		if logger != nil {
+			logger.Warn("[FIX] lock file exceeded stale threshold but owning process is still active",
+				"lock_path", path,
+				"age_seconds", int(age.Seconds()),
+				"pid", pid,
+			)
+		}
+		return qerrors.New(qerrors.CodeStorageLock, "active lock exists")
+	}
+
 	if logger != nil {
-		logger.Warn("stale lock detected, removing",
+		logger.Warn("[FIX] stale lock detected, removing",
 			"lock_path", path,
 			"age_seconds", int(age.Seconds()),
 			"pid", pid,

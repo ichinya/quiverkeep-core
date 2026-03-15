@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -59,7 +60,7 @@ func (c *Client) GetJSON(ctx context.Context, path string, query url.Values, tar
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return qerrors.New(qerrors.CodeCoreNotRunning, fmt.Sprintf("core returned status %d", resp.StatusCode))
+		return c.errorFromResponse(resp, fullURL)
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
@@ -68,4 +69,71 @@ func (c *Client) GetJSON(ctx context.Context, path string, query url.Values, tar
 
 	c.logger.Debug("http client request finish", "component", "cli", "operation", "http_get", "url", fullURL, "status", resp.StatusCode)
 	return nil
+}
+
+type errorEnvelope struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+func (c *Client) errorFromResponse(resp *http.Response, fullURL string) error {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return qerrors.Wrap(qerrors.CodeConnectionRefused, "failed reading core error response", err)
+	}
+
+	status := resp.StatusCode
+	code := codeFromStatus(status)
+	message := fmt.Sprintf("core returned status %d", status)
+
+	var envelope errorEnvelope
+	if decodeErr := json.Unmarshal(body, &envelope); decodeErr == nil {
+		if parsedCode := strings.TrimSpace(envelope.Error); parsedCode != "" {
+			code = qerrors.Code(parsedCode)
+		}
+		if parsedMessage := normalizeEnvelopeMessage(envelope.Error, envelope.Message); parsedMessage != "" {
+			message = parsedMessage
+		}
+	}
+
+	c.logger.Warn("[FIX] http client received non-success response",
+		"component", "cli",
+		"operation", "http_get",
+		"url", fullURL,
+		"status", status,
+		"error_code", code,
+	)
+
+	return qerrors.New(code, message)
+}
+
+func codeFromStatus(status int) qerrors.Code {
+	switch status {
+	case http.StatusBadRequest:
+		return qerrors.CodeValidationFailed
+	case http.StatusUnauthorized:
+		return qerrors.CodeUnauthorized
+	case http.StatusConflict:
+		return qerrors.CodePortInUse
+	default:
+		if status >= http.StatusInternalServerError {
+			return qerrors.CodeInternalServerError
+		}
+		return qerrors.CodeUnknown
+	}
+}
+
+func normalizeEnvelopeMessage(rawCode string, rawMessage string) string {
+	message := strings.TrimSpace(rawMessage)
+	if message == "" {
+		return ""
+	}
+
+	code := strings.TrimSpace(rawCode)
+	prefix := code + ": "
+	if code != "" && strings.HasPrefix(message, prefix) {
+		return strings.TrimSpace(strings.TrimPrefix(message, prefix))
+	}
+
+	return message
 }
