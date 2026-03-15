@@ -14,15 +14,25 @@ func Auth(cfg config.Config, logger *logging.Logger, remoteMode bool) func(http.
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestID := RequestIDFromContext(r.Context())
+			proxySpendingPath := requiresTokenForProxySpend(r.URL.Path)
+			requiresToken := remoteMode || proxySpendingPath
 
-			if remoteMode && !cfg.HasToken() {
-				logger.Warn("remote mode requires token",
+			if requiresToken && !cfg.HasToken() {
+				reason := "remote_mode"
+				message := "token is required in remote mode"
+				if proxySpendingPath {
+					reason = "proxy_spend"
+					message = "token is required for proxy operations"
+				}
+
+				logger.Warn("request requires token but token is not configured",
 					"component", "api",
 					"operation", "auth",
 					"request_id", requestID,
 					"path", r.URL.Path,
+					"reason", reason,
 				)
-				apierrors.Write(w, qerrors.New(qerrors.CodeUnauthorized, "token is required in remote mode"))
+				apierrors.Write(w, qerrors.New(qerrors.CodeUnauthorized, message))
 				return
 			}
 
@@ -62,5 +72,15 @@ func Auth(cfg config.Config, logger *logging.Logger, remoteMode bool) func(http.
 
 			next.ServeHTTP(w, r)
 		})
+	}
+}
+
+func requiresTokenForProxySpend(path string) bool {
+	cleanPath := strings.TrimSpace(path)
+	switch cleanPath {
+	case "/api/v1/proxy/anthropic/messages":
+		return true
+	default:
+		return false
 	}
 }

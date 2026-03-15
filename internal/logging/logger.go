@@ -14,13 +14,15 @@ type Config struct {
 }
 
 type Logger struct {
-	base *slog.Logger
+	base    *slog.Logger
+	closers []io.Closer
 }
 
 func New(cfg Config) (*Logger, error) {
 	level := parseLevel(cfg.Level)
 
 	var writer io.Writer = os.Stdout
+	closers := make([]io.Closer, 0, 1)
 	if cfg.Path != "" {
 		if err := os.MkdirAll(filepath.Dir(cfg.Path), 0o700); err != nil {
 			return nil, err
@@ -31,14 +33,15 @@ func New(cfg Config) (*Logger, error) {
 			return nil, err
 		}
 		writer = io.MultiWriter(os.Stdout, file)
+		closers = append(closers, file)
 	}
 
 	handler := slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: level})
-	return &Logger{base: slog.New(handler)}, nil
+	return &Logger{base: slog.New(handler), closers: closers}, nil
 }
 
 func (l *Logger) With(kv ...any) *Logger {
-	return &Logger{base: l.base.With(kv...)}
+	return &Logger{base: l.base.With(kv...), closers: l.closers}
 }
 
 func (l *Logger) Debug(msg string, kv ...any) {
@@ -55,6 +58,17 @@ func (l *Logger) Warn(msg string, kv ...any) {
 
 func (l *Logger) Error(msg string, kv ...any) {
 	l.base.Error(msg, kv...)
+}
+
+func (l *Logger) Close() error {
+	var firstErr error
+	for _, closer := range l.closers {
+		if err := closer.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	l.closers = nil
+	return firstErr
 }
 
 func parseLevel(raw string) slog.Level {

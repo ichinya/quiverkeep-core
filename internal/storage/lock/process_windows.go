@@ -19,7 +19,9 @@ func processExists(pid int) bool {
 	if err != nil {
 		return errors.Is(err, windows.ERROR_ACCESS_DENIED)
 	}
-	defer windows.CloseHandle(handle)
+	defer func() {
+		_ = windows.CloseHandle(handle)
+	}()
 
 	var code uint32
 	if err := windows.GetExitCodeProcess(handle, &code); err != nil {

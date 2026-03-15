@@ -56,7 +56,11 @@ func TestAcquireRemovesStaleLockWhenOwnerProcessIsGone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected stale lock to be replaced, got %v", err)
 	}
-	defer held.Release()
+	defer func() {
+		if releaseErr := held.Release(); releaseErr != nil {
+			t.Fatalf("release lock failed: %v", releaseErr)
+		}
+	}()
 
 	content, err := os.ReadFile(lockPath)
 	if err != nil {

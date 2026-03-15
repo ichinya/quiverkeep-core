@@ -37,6 +37,17 @@ type ProvidersConfig struct {
 	Copilot   ProviderEntry `json:"copilot"`
 }
 
+type ProxyAnthropicConfig struct {
+	BaseURL        string `json:"base_url"`
+	Version        string `json:"version"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
+}
+
+type ProxyConfig struct {
+	Enabled   bool                 `json:"enabled"`
+	Anthropic ProxyAnthropicConfig `json:"anthropic"`
+}
+
 type StorageConfig struct {
 	Path string `json:"path"`
 }
@@ -49,6 +60,7 @@ type LoggingConfig struct {
 type Config struct {
 	Core      CoreConfig      `json:"core"`
 	Providers ProvidersConfig `json:"providers"`
+	Proxy     ProxyConfig     `json:"proxy"`
 	Storage   StorageConfig   `json:"storage"`
 	Logging   LoggingConfig   `json:"logging"`
 }
@@ -79,6 +91,14 @@ func Default() Config {
 			Port:      8765,
 		},
 		Providers: ProvidersConfig{},
+		Proxy: ProxyConfig{
+			Enabled: false,
+			Anthropic: ProxyAnthropicConfig{
+				BaseURL:        "https://api.anthropic.com",
+				Version:        "2023-06-01",
+				TimeoutSeconds: 30,
+			},
+		},
 		Storage: StorageConfig{
 			Path: "",
 		},
@@ -122,12 +142,9 @@ func Load(opts LoadOptions, logger *logging.Logger) (Config, Metadata, error) {
 
 	switch {
 	case fileExists(primaryPath):
-		targetPath = primaryPath
 	case fileExists(legacyPath):
 		targetPath = legacyPath
 		usedLegacy = true
-	default:
-		targetPath = primaryPath
 	}
 
 	meta := Metadata{
@@ -248,6 +265,17 @@ func mergeConfig(base Config, loaded Config) Config {
 	base.Core.AutoStart = loaded.Core.AutoStart || base.Core.AutoStart
 
 	base.Providers = loaded.Providers
+	base.Proxy.Enabled = loaded.Proxy.Enabled
+
+	if strings.TrimSpace(loaded.Proxy.Anthropic.BaseURL) != "" {
+		base.Proxy.Anthropic.BaseURL = loaded.Proxy.Anthropic.BaseURL
+	}
+	if strings.TrimSpace(loaded.Proxy.Anthropic.Version) != "" {
+		base.Proxy.Anthropic.Version = loaded.Proxy.Anthropic.Version
+	}
+	if loaded.Proxy.Anthropic.TimeoutSeconds > 0 {
+		base.Proxy.Anthropic.TimeoutSeconds = loaded.Proxy.Anthropic.TimeoutSeconds
+	}
 
 	if strings.TrimSpace(loaded.Storage.Path) != "" {
 		base.Storage.Path = loaded.Storage.Path
@@ -275,6 +303,10 @@ func applyEnv(cfg Config, logger *logging.Logger) Config {
 	overrideString(&cfg.Providers.OpenAI.Key, "OPENAI_API_KEY", logger)
 	overrideString(&cfg.Providers.Anthropic.Key, "ANTHROPIC_API_KEY", logger)
 	overrideString(&cfg.Providers.Copilot.Token, "GITHUB_TOKEN", logger)
+	overrideBool(&cfg.Proxy.Enabled, "QUIVERKEEP_PROXY_ENABLED", logger)
+	overrideString(&cfg.Proxy.Anthropic.BaseURL, "QUIVERKEEP_PROXY_ANTHROPIC_BASE_URL", logger)
+	overrideString(&cfg.Proxy.Anthropic.Version, "QUIVERKEEP_PROXY_ANTHROPIC_VERSION", logger)
+	overrideInt(&cfg.Proxy.Anthropic.TimeoutSeconds, "QUIVERKEEP_PROXY_TIMEOUT_SECONDS", logger)
 
 	return cfg
 }
@@ -364,6 +396,26 @@ func overrideInt(target *int, key string, logger *logging.Logger) {
 		}
 		return
 	}
+	*target = parsed
+	if logger != nil {
+		logger.Debug("config override from env", "field", strings.ToLower(key), "value", parsed)
+	}
+}
+
+func overrideBool(target *bool, key string, logger *logging.Logger) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return
+	}
+
+	parsed, err := strconv.ParseBool(raw)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("invalid bool env value ignored", "field", strings.ToLower(key), "value", raw)
+		}
+		return
+	}
+
 	*target = parsed
 	if logger != nil {
 		logger.Debug("config override from env", "field", strings.ToLower(key), "value", parsed)
