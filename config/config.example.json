@@ -17,6 +17,14 @@
       "token": ""
     }
   },
+  "proxy": {
+    "enabled": false,
+    "anthropic": {
+      "base_url": "https://api.anthropic.com",
+      "version": "2023-06-01",
+      "timeout_seconds": 30
+    }
+  },
   "storage": {
     "path": ""
   },

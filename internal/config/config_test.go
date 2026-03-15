@@ -95,6 +95,51 @@ func TestSanitizedMasksSecrets(t *testing.T) {
 	}
 }
 
+func TestProxyEnvOverrides(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+	logger := newTestLogger(t)
+
+	if err := os.Setenv("QUIVERKEEP_PROXY_ENABLED", "true"); err != nil {
+		t.Fatalf("setenv failed: %v", err)
+	}
+	if err := os.Setenv("QUIVERKEEP_PROXY_ANTHROPIC_BASE_URL", "https://proxy.example.test"); err != nil {
+		t.Fatalf("setenv failed: %v", err)
+	}
+	if err := os.Setenv("QUIVERKEEP_PROXY_ANTHROPIC_VERSION", "2024-01-01"); err != nil {
+		t.Fatalf("setenv failed: %v", err)
+	}
+	if err := os.Setenv("QUIVERKEEP_PROXY_TIMEOUT_SECONDS", "42"); err != nil {
+		t.Fatalf("setenv failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Unsetenv("QUIVERKEEP_PROXY_ENABLED")
+		_ = os.Unsetenv("QUIVERKEEP_PROXY_ANTHROPIC_BASE_URL")
+		_ = os.Unsetenv("QUIVERKEEP_PROXY_ANTHROPIC_VERSION")
+		_ = os.Unsetenv("QUIVERKEEP_PROXY_TIMEOUT_SECONDS")
+	})
+
+	cfg, _, err := Load(LoadOptions{ConfigPath: configPath}, logger)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if !cfg.Proxy.Enabled {
+		t.Fatalf("expected proxy to be enabled by env")
+	}
+	if cfg.Proxy.Anthropic.BaseURL != "https://proxy.example.test" {
+		t.Fatalf("unexpected anthropic base url: %s", cfg.Proxy.Anthropic.BaseURL)
+	}
+	if cfg.Proxy.Anthropic.Version != "2024-01-01" {
+		t.Fatalf("unexpected anthropic version: %s", cfg.Proxy.Anthropic.Version)
+	}
+	if cfg.Proxy.Anthropic.TimeoutSeconds != 42 {
+		t.Fatalf("unexpected anthropic timeout: %d", cfg.Proxy.Anthropic.TimeoutSeconds)
+	}
+}
+
 func newTestLogger(t *testing.T) *logging.Logger {
 	t.Helper()
 	logger, err := logging.New(logging.Config{Level: "debug"})

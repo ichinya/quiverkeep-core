@@ -55,6 +55,7 @@ func buildRootCommand(ctx context.Context, opts *Options) *cobra.Command {
 	cmd.AddCommand(buildStatusCommand(ctx, opts))
 	cmd.AddCommand(buildUsageCommand(ctx, opts))
 	cmd.AddCommand(buildLimitsCommand(ctx, opts))
+	cmd.AddCommand(buildProxyCommand(ctx, opts))
 	cmd.AddCommand(buildConfigCommand(ctx, opts))
 	cmd.AddCommand(buildDoctorCommand(ctx, opts))
 	cmd.AddCommand(&cobra.Command{
@@ -142,6 +143,23 @@ func buildLimitsCommand(ctx context.Context, opts *Options) *cobra.Command {
 			return runReadCommand(ctx, opts, "/api/v1/limits", nil)
 		},
 	}
+}
+
+func buildProxyCommand(ctx context.Context, opts *Options) *cobra.Command {
+	command := &cobra.Command{
+		Use:   "proxy",
+		Short: "Proxy diagnostics and operations via HTTP",
+	}
+
+	command.AddCommand(&cobra.Command{
+		Use:   "status",
+		Short: "Get proxy diagnostics via HTTP",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return runReadCommand(ctx, opts, "/api/v1/proxy/status", nil)
+		},
+	})
+
+	return command
 }
 
 func buildConfigCommand(ctx context.Context, opts *Options) *cobra.Command {

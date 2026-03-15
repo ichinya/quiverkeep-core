@@ -21,6 +21,10 @@ const (
 	CodeStorageCorrupt      Code = "STORAGE_CORRUPT_ERROR"
 	CodeValidationFailed    Code = "VALIDATION_FAILED"
 	CodeInternalServerError Code = "INTERNAL_SERVER_ERROR"
+	CodeProxyDisabled       Code = "PROXY_DISABLED"
+	CodeProxyNotConfigured  Code = "PROXY_NOT_CONFIGURED"
+	CodeProxyUpstreamError  Code = "PROXY_UPSTREAM_ERROR"
+	CodeProxyTimeout        Code = "PROXY_TIMEOUT"
 )
 
 type AppError struct {

@@ -15,6 +15,7 @@ func TestRootCommandHasExpectedSubcommands(t *testing.T) {
 		"status":  false,
 		"usage":   false,
 		"limits":  false,
+		"proxy":   false,
 		"config":  false,
 		"doctor":  false,
 		"version": false,
@@ -30,6 +31,33 @@ func TestRootCommandHasExpectedSubcommands(t *testing.T) {
 		if !found {
 			t.Fatalf("expected subcommand %s", name)
 		}
+	}
+}
+
+func TestProxyCommandHasStatusSubcommand(t *testing.T) {
+	t.Parallel()
+
+	root := buildRootCommand(context.Background(), &Options{})
+	var proxyFound bool
+	var hasStatus bool
+	for _, command := range root.Commands() {
+		if command.Name() == "proxy" {
+			proxyFound = true
+			for _, proxyCommand := range command.Commands() {
+				if proxyCommand.Name() == "status" {
+					hasStatus = true
+					break
+				}
+			}
+			break
+		}
+	}
+
+	if !proxyFound {
+		t.Fatalf("expected proxy command on root")
+	}
+	if !hasStatus {
+		t.Fatalf("expected proxy command to expose status subcommand")
 	}
 }
 

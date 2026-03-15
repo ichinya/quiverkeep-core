@@ -48,3 +48,114 @@ paths:
       responses:
         "200":
           description: Provider status payload
+  /api/v1/proxy/anthropic/messages:
+    post:
+      summary: Anthropic API proxy (L7)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Anthropic `/v1/messages` request payload passthrough.
+              additionalProperties: true
+      responses:
+        "200":
+          description: Proxied Anthropic response payload
+        "400":
+          description: Validation error (invalid method/content-type/body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Core auth error (missing/invalid bearer token)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream provider failure mapped to stable core error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Proxy is disabled or provider key is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "504":
+          description: Upstream provider timeout mapped to stable core error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/proxy/status:
+    get:
+      summary: Proxy diagnostics status
+      responses:
+        "200":
+          description: Proxy status payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProxyStatusResponse"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Stable error code
+        message:
+          type: string
+          description: Human-readable error message
+    ProxyStatusResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProxyStatusItem"
+    ProxyStatusItem:
+      type: object
+      required:
+        - provider
+        - enabled
+        - configured
+      properties:
+        provider:
+          type: string
+          example: anthropic
+        enabled:
+          type: boolean
+        configured:
+          type: boolean
+        last_attempt_at:
+          type: string
+          format: date-time
+        last_success_at:
+          type: string
+          format: date-time
+        last_error_code:
+          type: string
+          example: PROXY_TIMEOUT
+        last_error_message:
+          type: string
+        last_upstream_code:
+          type: integer

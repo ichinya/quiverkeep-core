@@ -73,3 +73,43 @@ func TestRunMarksConnectionFailureAsNotRunning(t *testing.T) {
 		t.Fatal("expected doctor to mark unreachable core as not running")
 	}
 }
+
+func TestRunFetchesProxyStatusWhenCoreIsReachable(t *testing.T) {
+	t.Parallel()
+
+	logger, err := logging.New(logging.Config{Level: "debug"})
+	if err != nil {
+		t.Fatalf("logger init failed: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/status":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		case "/api/v1/proxy/status":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"items":[{"enabled":true}]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"UNKNOWN_ERROR","message":"not found"}`))
+		}
+	}))
+	defer server.Close()
+
+	client := httpclient.New(server.URL, "", logger)
+	report, err := Run(context.Background(), client, logger)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !report.CoreRunning {
+		t.Fatal("expected core_running=true")
+	}
+	if !report.ProxyStatusReachable {
+		t.Fatal("expected proxy_status_reachable=true")
+	}
+	if !report.ProxyEnabled {
+		t.Fatal("expected proxy_enabled=true")
+	}
+}

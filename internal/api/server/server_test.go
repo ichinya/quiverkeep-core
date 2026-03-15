@@ -45,6 +45,17 @@ func TestAuthMatrix(t *testing.T) {
 		}
 	})
 
+	t.Run("loopback_proxy_without_token_rejects", func(t *testing.T) {
+		cfg := config.Default()
+		handler := middleware.Auth(cfg, logger, false)(next)
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/proxy/anthropic/messages", nil)
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401, got %d", rec.Code)
+		}
+	})
+
 	t.Run("token_with_valid_header_allows", func(t *testing.T) {
 		cfg := config.Default()
 		token := "secret"
