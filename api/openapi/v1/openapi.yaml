@@ -65,7 +65,7 @@ paths:
         "200":
           description: Proxied Anthropic response payload
         "400":
-          description: Validation error (invalid method/content-type/body)
+          description: Validation error (invalid method/content-type/body or upstream client-side rejection)
           content:
             application/json:
               schema:

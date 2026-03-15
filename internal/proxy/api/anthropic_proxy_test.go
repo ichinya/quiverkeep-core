@@ -212,6 +212,84 @@ func TestAnthropicProxyMapsUpstreamNonSuccess(t *testing.T) {
 	}
 }
 
+func TestAnthropicProxyMapsUpstreamClientErrorToValidation(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"type":"error","error":{"type":"invalid_request_error"}}`))
+	}))
+	defer upstream.Close()
+
+	logger, err := logging.New(logging.Config{Level: "debug"})
+	if err != nil {
+		t.Fatalf("logger init failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = logger.Close()
+	})
+
+	cfg := config.Default()
+	cfg.Proxy.Enabled = true
+	cfg.Proxy.Anthropic.BaseURL = upstream.URL
+	cfg.Providers.Anthropic.Key = "anthropic-test-key"
+
+	proxy := NewAnthropicProxy(cfg, logger, &captureStore{})
+	_, err = proxy.Forward(context.Background(), ForwardRequest{
+		Payload:   []byte(`{"model":"claude-3-5-sonnet","messages":[]}`),
+		RequestID: "req-upstream-400",
+	})
+	if qerrors.CodeOf(err) != qerrors.CodeValidationFailed {
+		t.Fatalf("expected VALIDATION_FAILED, got %v", qerrors.CodeOf(err))
+	}
+
+	status := proxy.Status()
+	if status.LastUpstreamCode == nil || *status.LastUpstreamCode != http.StatusBadRequest {
+		t.Fatalf("expected last upstream status 400 in diagnostics")
+	}
+	if status.LastErrorCode != string(qerrors.CodeValidationFailed) {
+		t.Fatalf("expected diagnostics error code VALIDATION_FAILED, got %s", status.LastErrorCode)
+	}
+}
+
+func TestAnthropicProxyFailsOnOversizedUpstreamBody(t *testing.T) {
+	t.Parallel()
+
+	oversizedContent := strings.Repeat("a", maxUpstreamBodyBytes+64)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"content":"` + oversizedContent + `"}`))
+	}))
+	defer upstream.Close()
+
+	logger, err := logging.New(logging.Config{Level: "debug"})
+	if err != nil {
+		t.Fatalf("logger init failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = logger.Close()
+	})
+
+	cfg := config.Default()
+	cfg.Proxy.Enabled = true
+	cfg.Proxy.Anthropic.BaseURL = upstream.URL
+	cfg.Providers.Anthropic.Key = "anthropic-test-key"
+
+	proxy := NewAnthropicProxy(cfg, logger, &captureStore{})
+	_, err = proxy.Forward(context.Background(), ForwardRequest{
+		Payload:   []byte(`{"model":"claude-3-5-sonnet","messages":[]}`),
+		RequestID: "req-upstream-oversized",
+	})
+	if qerrors.CodeOf(err) != qerrors.CodeProxyUpstreamError {
+		t.Fatalf("expected PROXY_UPSTREAM_ERROR, got %v", qerrors.CodeOf(err))
+	}
+
+	status := proxy.Status()
+	if status.LastUpstreamCode == nil || *status.LastUpstreamCode != http.StatusOK {
+		t.Fatalf("expected last upstream status 200 in diagnostics")
+	}
+}
+
 func TestAnthropicProxyMapsTimeout(t *testing.T) {
 	t.Parallel()
 
