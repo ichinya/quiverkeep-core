@@ -227,6 +227,37 @@ func TestAnthropicProxyMapsUpstreamClientFailure(t *testing.T) {
 	}
 }
 
+func TestAnthropicProxyMapsUpstreamRateLimitFailure(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"type":"error","error":{"type":"rate_limit_error"}}`))
+	}))
+	defer upstream.Close()
+
+	cfg := config.Default()
+	cfg.Proxy.Enabled = true
+	cfg.Proxy.Anthropic.BaseURL = upstream.URL
+	cfg.Providers.Anthropic.Key = "test-anthropic"
+
+	api, cleanup := newTestAPIWithConfig(t, cfg)
+	defer cleanup()
+
+	mux := http.NewServeMux()
+	api.Register(mux)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/proxy/anthropic/messages", strings.NewReader(`{"model":"claude-3-5-sonnet"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected status 502, got %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestAnthropicProxyMapsTimeoutFailure(t *testing.T) {
 	t.Parallel()
 

@@ -500,8 +500,10 @@ func statusMessageFromError(err error) string {
 }
 
 func proxyErrorFromUpstreamStatus(statusCode int) *qerrors.AppError {
-	if statusCode >= http.StatusBadRequest && statusCode < http.StatusInternalServerError {
+	switch statusCode {
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
 		return qerrors.New(qerrors.CodeValidationFailed, fmt.Sprintf("anthropic request rejected with status %d", statusCode))
+	default:
+		return qerrors.New(qerrors.CodeProxyUpstreamError, fmt.Sprintf("anthropic upstream returned %d", statusCode))
 	}
-	return qerrors.New(qerrors.CodeProxyUpstreamError, fmt.Sprintf("anthropic upstream returned %d", statusCode))
 }

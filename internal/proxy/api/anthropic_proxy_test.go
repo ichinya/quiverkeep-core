@@ -252,6 +252,59 @@ func TestAnthropicProxyMapsUpstreamClientErrorToValidation(t *testing.T) {
 	}
 }
 
+func TestProxyErrorFromUpstreamStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		status   int
+		expected qerrors.Code
+	}{
+		{
+			name:     "bad request maps to validation",
+			status:   http.StatusBadRequest,
+			expected: qerrors.CodeValidationFailed,
+		},
+		{
+			name:     "unprocessable entity maps to validation",
+			status:   http.StatusUnprocessableEntity,
+			expected: qerrors.CodeValidationFailed,
+		},
+		{
+			name:     "unauthorized stays upstream error",
+			status:   http.StatusUnauthorized,
+			expected: qerrors.CodeProxyUpstreamError,
+		},
+		{
+			name:     "forbidden stays upstream error",
+			status:   http.StatusForbidden,
+			expected: qerrors.CodeProxyUpstreamError,
+		},
+		{
+			name:     "rate limited stays upstream error",
+			status:   http.StatusTooManyRequests,
+			expected: qerrors.CodeProxyUpstreamError,
+		},
+		{
+			name:     "server error stays upstream error",
+			status:   http.StatusBadGateway,
+			expected: qerrors.CodeProxyUpstreamError,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := proxyErrorFromUpstreamStatus(tc.status)
+			if qerrors.CodeOf(err) != tc.expected {
+				t.Fatalf("expected %v, got %v", tc.expected, qerrors.CodeOf(err))
+			}
+		})
+	}
+}
+
 func TestAnthropicProxyFailsOnOversizedUpstreamBody(t *testing.T) {
 	t.Parallel()
 
