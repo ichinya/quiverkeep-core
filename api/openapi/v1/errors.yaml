@@ -1,0 +1,27 @@
+openapi: 3.0.3
+info:
+  title: QuiverKeep API Errors
+  version: v1.0.0
+components:
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Stable error code
+        message:
+          type: string
+          description: Human-readable message
+  examples:
+    Unauthorized:
+      value:
+        error: UNAUTHORIZED
+        message: missing bearer token
+    StorageFailure:
+      value:
+        error: STORAGE_QUERY_ERROR
+        message: failed query usage

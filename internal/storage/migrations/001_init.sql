@@ -1,0 +1,25 @@
+CREATE TABLE IF NOT EXISTS schema_version (
+  version INTEGER NOT NULL
+);
+
+INSERT INTO schema_version(version)
+SELECT 1
+WHERE NOT EXISTS (SELECT 1 FROM schema_version);
+
+CREATE TABLE IF NOT EXISTS usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  service TEXT NOT NULL,
+  model TEXT NOT NULL,
+  tokens_in INTEGER NOT NULL,
+  tokens_out INTEGER NOT NULL,
+  cost REAL NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  service TEXT PRIMARY KEY,
+  plan TEXT NOT NULL,
+  limit_value INTEGER NULL,
+  used INTEGER NOT NULL DEFAULT 0,
+  reset_date DATETIME NULL
+);
